@@ -1,29 +1,42 @@
-provider "aws" {
-  region  = "us-east-1"
-  profile = "sandbox"
-}
-
-data "aws_ami" "latest_amazon_linux" {
-  most_recent = true
-  owners = ["amazon"]
-
-  filter {
-    name = "name"
-    values = ["al2023-ami-2023.11.20260406.2-kernel-6.18-x86_64"]
-  }
-}
-
-output "latest_amazon_linux_ami_id" {
-  value = data.aws_ami.latest_amazon_linux.id
+locals {
+  resource_name = "${var.name_prefix}-server"
 }
 
 resource "aws_instance" "server" {
-  # ami         = "ami-040e10ddbaf780d2f" 
+  count         = var.instance_count
   ami           = data.aws_ami.latest_amazon_linux.id
-  instance_type = "t3.micro"
+  instance_type = var.instance_type
+
+  vpc_security_group_ids = [aws_security_group.server_sg.id]
 
   tags = {
-    Name = "jsrn-server"
+    Name      = "${local.resource_name}-${count.index + 1}"
     ManagedBy = "Terraform"
   }
+}
+
+resource "aws_security_group" "server_sg" {
+  name        = "${var.name_prefix}-sg"
+  description = "Ingress rule for SSH"
+
+  tags = {
+    Name      = "${local.resource_name}-sg"
+    ManagedBy = "Terraform"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_ssh" {
+  security_group_id = aws_security_group.server_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 22
+  ip_protocol       = "tcp"
+  to_port           = 22
+}
+
+resource "aws_vpc_security_group_ingress_rule" "allow_http" {
+  security_group_id = aws_security_group.server_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 80
+  ip_protocol       = "tcp"
+  to_port           = 80
 }
